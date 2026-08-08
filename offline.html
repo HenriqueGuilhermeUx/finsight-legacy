@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - F-Insight</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 500px;
+    }
+
+    .icon {
+      width: 120px;
+      height: 120px;
+      margin: 0 auto 30px;
+      background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 60px;
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+
+    p {
+      font-size: 18px;
+      color: #a0a0a0;
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+    }
+
+    .features {
+      margin-top: 48px;
+      text-align: left;
+    }
+
+    .feature {
+      display: flex;
+      align-items: start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      background: rgba(14, 165, 233, 0.1);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .feature-text {
+      flex: 1;
+    }
+
+    .feature-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: #a0a0a0;
+    }
+
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 24px;
+      }
+
+      p {
+        font-size: 16px;
+      }
+
+      .icon {
+        width: 100px;
+        height: 100px;
+        font-size: 50px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">
+      📡
+    </div>
+    
+    <h1>Você está offline</h1>
+    
+    <p>
+      Parece que você perdeu a conexão com a internet. Não se preocupe, você ainda pode acessar algumas funcionalidades do F-Insight.
+    </p>
+
+    <button class="button" onclick="window.location.reload()">
+      Tentar novamente
+    </button>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">💾</div>
+        <div class="feature-text">
+          <div class="feature-title">Dados em cache</div>
+          <div class="feature-desc">Visualize dados já carregados anteriormente</div>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">📊</div>
+        <div class="feature-text">
+          <div class="feature-title">Análises salvas</div>
+          <div class="feature-desc">Acesse suas análises e relatórios salvos</div>
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature-icon">🔔</div>
+        <div class="feature-text">
+          <div class="feature-title">Alertas configurados</div>
+          <div class="feature-desc">Seus alertas continuam ativos e sincronizarão quando voltar online</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Verificar conexão a cada 5 segundos
+    setInterval(() => {
+      if (navigator.onLine) {
+        window.location.reload();
+      }
+    }, 5000);
+
+    // Listener para mudança de status online
+    window.addEventListener('online', () => {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>
