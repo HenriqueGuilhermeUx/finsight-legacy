@@ -55,3 +55,59 @@ jobs:
             /tmp/finsight-expo-config-error.txt
           if-no-files-found: ignore
           retention-days: 7
+
+  native-ios-simulator:
+    needs: expo-ios-configuration
+    runs-on: macos-15
+    timeout-minutes: 65
+    env:
+      CI: '1'
+      EXPO_PUBLIC_ENV: ios-preflight
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install legacy dependencies in disposable runner
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Resolve active Expo configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npx expo config --type public --json >/tmp/finsight-native-config.json 2>/tmp/finsight-native-config-errors.txt; then
+            echo "Legacy dynamic config not loadable here; using app.json only for this ephemeral diagnostic build."
+            mv app.config.js "$RUNNER_TEMP/finsight-app.config.js.bak"
+            npx expo config --type public --json >/tmp/finsight-native-config.json
+          fi
+          node -e 'const c=require("/tmp/finsight-native-config.json");if(c.ios?.bundleIdentifier!=="org.finsight.mobile"){process.exit(1)}'
+      - name: Generate unsigned native project from legacy source
+        run: npx expo prebuild --platform ios --no-install
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+      - name: Compile legacy iOS simulator without certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' -type d | head -1)"
+          test -n "$WORKSPACE"
+          SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -derivedDataPath "$RUNNER_TEMP/finsight-native-ios" build 2>&1 | tee ios-native-build.log
+      - name: Archive native build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-native-ios-diagnostics
+          path: |
+            ios-native-build.log
+            /tmp/finsight-native-config-errors.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Archive unsigned simulator app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-unsigned-simulator
+          path: ${{ runner.temp }}/finsight-native-ios/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: error
+          retention-days: 7
