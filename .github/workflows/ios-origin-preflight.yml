@@ -1,0 +1,47 @@
+name: F-Insight legacy native-origin iOS preflight (unsigned)
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'assets/**'
+      - 'lib/**'
+      - 'app.json'
+      - 'app.config.js'
+      - 'package.json'
+      - '.github/workflows/ios-origin-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  expo-ios-configuration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: '1'
+      EXPO_PUBLIC_ENV: ios-preflight
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install legacy Expo SDK 50 dependencies without modifying source
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Check active Expo config and bundle identifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo config --type public --json > /tmp/finsight-expo-config.json
+          node -e 'const c=require("/tmp/finsight-expo-config.json");if(c.ios?.bundleIdentifier!=="org.finsight.mobile"||c.android?.package!=="org.finsight.mobile"){console.error("Unexpected source ids. Review app.json/app.config.js before continuing.");process.exit(1)}console.log("legacy source IDs match: "+c.ios.bundleIdentifier)'
+      - name: Export offline iOS JavaScript bundle
+        run: npx expo export --platform ios --output-dir dist-ios-preflight
+      - name: Archive diagnostics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-ios-config
+          path: /tmp/finsight-expo-config.json
+          if-no-files-found: ignore
+          retention-days: 7
