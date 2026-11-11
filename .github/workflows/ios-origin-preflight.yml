@@ -33,7 +33,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx expo config --type public --json > /tmp/finsight-expo-config.json
+          if ! npx expo config --type public --json > /tmp/finsight-expo-config.json 2> /tmp/finsight-expo-config-error.txt; then
+            echo "Expo config validation failed (legacy configuration):"
+            cat /tmp/finsight-expo-config-error.txt
+            cat /tmp/finsight-expo-config.json
+            exit 1
+          fi
           node -e 'const c=require("/tmp/finsight-expo-config.json");if(c.ios?.bundleIdentifier!=="org.finsight.mobile"||c.android?.package!=="org.finsight.mobile"){console.error("Unexpected source ids. Review app.json/app.config.js before continuing.");process.exit(1)}console.log("legacy source IDs match: "+c.ios.bundleIdentifier)'
       - name: Export offline iOS JavaScript bundle
         run: npx expo export --platform ios --output-dir dist-ios-preflight
@@ -42,6 +47,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: finsight-legacy-ios-config
-          path: /tmp/finsight-expo-config.json
+          path: |
+            /tmp/finsight-expo-config.json
+            /tmp/finsight-expo-config-error.txt
           if-no-files-found: ignore
           retention-days: 7
