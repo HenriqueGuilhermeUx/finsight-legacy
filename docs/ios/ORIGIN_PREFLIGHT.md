@@ -10,3 +10,9 @@ This repository has an Expo SDK 50 React Native mobile application with the sour
 - The `app.config.js` includes placeholder Apple submit credentials and links requiring validation; they must **never** be used for a real submission.
 
 Correspondence task: [Alternative Ventures iOS inventory](https://github.com/HenriqueGuilhermeUx/alternativeventures/issues/4).
+
+## CI results (11 November 2026)
+
+- Run [43090195572](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43090195572) **PASS**: dependencies, active-or-fallback Expo configuration, and offline iOS JavaScript export. The earlier runs failed on Expo config reading. This does not prove the active dynamic `app.config.js` itself works; the runner may have used the `app.json` fallback.
+- A separate `native-ios-simulator` job was added to verify a real **unsigned** Xcode build on a disposable macOS runner. It produces diagnostics and a simulator-only `.app` artifact when successful, never an IPA for distribution.
+- The legacy SDK is not to be upgraded until the Google Play product mapping and regression risks are independently verified. No changes to `app.json`, `app.config.js`, Android configuration, app source or production deployments were made.
