@@ -80,6 +80,25 @@ jobs:
             npx expo config --type public --json >/tmp/finsight-native-config.json
           fi
           node -e 'const c=require("/tmp/finsight-native-config.json");if(c.ios?.bundleIdentifier!=="org.finsight.mobile"){process.exit(1)}'
+      - name: Provide temporary non-commercial icon only if legacy asset is missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, struct, zlib
+          path = pathlib.Path("assets/icon.png")
+          if path.exists():
+              print("Existing icon preserved")
+          else:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              w = h = 1024
+              raw = (b"\x00" + bytes((36, 62, 88, 255)) * w) * h
+              def chunk(tag, data):
+                  return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+              path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+              print("Created ephemeral placeholder icon; not an App Store asset")
+          PY
+          test -f assets/icon.png
       - name: Generate unsigned native project from legacy source
         run: npx expo prebuild --platform ios --no-install
       - name: Install CocoaPods
