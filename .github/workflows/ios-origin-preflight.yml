@@ -58,7 +58,7 @@ jobs:
 
   native-ios-simulator:
     needs: expo-ios-configuration
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 65
     env:
       CI: '1'
