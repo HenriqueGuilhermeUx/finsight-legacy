@@ -146,6 +146,34 @@ jobs:
           test -n "$WORKSPACE"
           SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
           xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -derivedDataPath "$RUNNER_TEMP/finsight-native-ios" build 2>&1 | tee ios-native-build.log
+      - name: Install and open unsigned application in iPhone simulator
+        if: success()
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/finsight-native-ios/Build/Products/Debug-iphonesimulator/FInsight.app"
+          test -d "$APP"
+          DEVICE="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); candidates=[v for group in d["devices"].values() for v in group if v.get("isAvailable") and "iPhone" in v.get("name","")]; print(candidates[0]["udid"] if candidates else "")')"
+          test -n "$DEVICE"
+          echo "Running basic simulator launch smoke on $DEVICE"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"
+          test "$BUNDLE" = "org.finsight.mobile"
+          xcrun simctl launch "$DEVICE" "$BUNDLE"
+          mkdir -p ios-smoke
+          xcrun simctl io "$DEVICE" screenshot ios-smoke/finsight-launch.png
+          echo "Simulator launch command and screenshot succeeded; this is NOT functional QA."
+      - name: Archive simulator smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-ios-simulator-smoke
+          path: ios-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Archive native build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
