@@ -101,6 +101,21 @@ jobs:
           PY
           test -f assets/icon.png
           test -f assets/splash.png
+          python3 - <<'PY'
+          import pathlib, wave
+          path = pathlib.Path("assets/notification-sound.wav")
+          if path.is_file():
+              print("Preserving existing notification sound")
+          else:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              with wave.open(str(path), "wb") as sound:
+                  sound.setnchannels(1)
+                  sound.setsampwidth(2)
+                  sound.setframerate(22050)
+                  sound.writeframes(b"\x00\x00" * 2205)
+              print("Created ephemeral silent notification sound for CI only; never distribute")
+          PY
+          test -f assets/notification-sound.wav
       - name: Generate unsigned native project from legacy source
         run: npx expo prebuild --platform ios --no-install
       - name: Install CocoaPods
