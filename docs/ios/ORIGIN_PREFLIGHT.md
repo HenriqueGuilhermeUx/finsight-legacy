@@ -16,3 +16,23 @@ Correspondence task: [Alternative Ventures iOS inventory](https://github.com/Hen
 - Run [43090195572](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43090195572) **PASS**: dependencies, active-or-fallback Expo configuration, and offline iOS JavaScript export. The earlier runs failed on Expo config reading. This does not prove the active dynamic `app.config.js` itself works; the runner may have used the `app.json` fallback.
 - A separate `native-ios-simulator` job was added to verify a real **unsigned** Xcode build on a disposable macOS runner. It produces diagnostics and a simulator-only `.app` artifact when successful, never an IPA for distribution.
 - The legacy SDK is not to be upgraded until the Google Play product mapping and regression risks are independently verified. No changes to `app.json`, `app.config.js`, Android configuration, app source or production deployments were made.
+
+## Native Xcode diagnostic — 12 November 2026
+
+[GitHub Actions run 43286970468](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43286970468) confirmed success in Expo config/JS export, transient asset fixtures, native `expo prebuild`, and CocoaPods installation. **Unsigned Xcode build FAILED** (exit 65) on Xcode 26.6/iPhoneSimulator SDK 26.5:
+
+```text
+node_modules/expo-device/ios/UIDevice.swift:188:12:
+error: cannot find 'TARGET_OS_SIMULATOR' in scope
+```
+
+This is a concrete Swift compilation failure in the legacy `expo-device` dependency, not proof of an app source-code failure. No simulator `.app` was produced. Avoid blind changes to production dependencies, Android, Expo SDK, or permanent replacement of icon/splash/notification assets.
+
+### Proposed next isolated compatibility investigation
+
+1. Inspect the affected Swift source around line 188 and determine its available native alternatives (e.g., Swift's platform compile-time checks) before proposing a narrow CI-only diagnostic change.
+2. Collect any further Swift/Clang errors after a minimal *runner-only* adaptation and flag them separately; do not silently mask compile errors.
+3. Cross-check the latest Google Play AAB source/commit before deciding whether `finsight-legacy` merits modernization at all. A modern Vite/Capacitor candidate also exists in `f-insight` PR #28.
+4. Require a real unsigned Xcode build, installation and launch before marking this legacy source iOS-ready. A repaired native build still does not authorize TestFlight or App Store release.
+
+Full build evidence: [native diagnostic artifact](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43286970468/artifacts/13975114921).
