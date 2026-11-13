@@ -1,0 +1,218 @@
+name: F-Insight legacy native-origin iOS preflight (unsigned)
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'assets/**'
+      - 'lib/**'
+      - 'app.json'
+      - 'app.config.js'
+      - 'package.json'
+      - '.github/workflows/ios-origin-preflight.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  expo-ios-configuration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: '1'
+      EXPO_PUBLIC_ENV: ios-preflight
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install legacy Expo SDK 50 dependencies without modifying source
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Check active Expo config and record legacy incompatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npx expo config --type public --json > /tmp/finsight-expo-config.json 2> /tmp/finsight-expo-config-error.txt; then
+            echo "Active Expo config parsed."
+          else
+            echo "WARNING: active app.config.js failed to parse on Expo 50; testing app.json fallback ONLY, without modifying source."
+            cat /tmp/finsight-expo-config-error.txt || true
+            mv app.config.js "$RUNNER_TEMP/finsight-app.config.js.bak"
+            npx expo config --type public --json > /tmp/finsight-expo-config.json
+            echo "Fallback app.json valid. Original active app.config.js still requires separate remediation."
+          fi
+          node -e 'const c=require("/tmp/finsight-expo-config.json");if(c.ios?.bundleIdentifier!=="org.finsight.mobile"||c.android?.package!=="org.finsight.mobile"){console.error("Unexpected ids in fallback/active Expo config");process.exit(1)}console.log("legacy source IDs: "+c.ios.bundleIdentifier)'
+      - name: Export offline iOS JavaScript bundle
+        run: npx expo export --platform ios --output-dir dist-ios-preflight
+      - name: Archive diagnostics only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-ios-config
+          path: |
+            /tmp/finsight-expo-config.json
+            /tmp/finsight-expo-config-error.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  native-ios-simulator:
+    needs: expo-ios-configuration
+    runs-on: macos-26
+    timeout-minutes: 65
+    env:
+      CI: '1'
+      EXPO_PUBLIC_ENV: ios-preflight
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install legacy dependencies in disposable runner
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Resolve active Expo configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npx expo config --type public --json >/tmp/finsight-native-config.json 2>/tmp/finsight-native-config-errors.txt; then
+            echo "Legacy dynamic config not loadable here; using app.json only for this ephemeral diagnostic build."
+            mv app.config.js "$RUNNER_TEMP/finsight-app.config.js.bak"
+            npx expo config --type public --json >/tmp/finsight-native-config.json
+          fi
+          node -e 'const c=require("/tmp/finsight-native-config.json");if(c.ios?.bundleIdentifier!=="org.finsight.mobile"){process.exit(1)}'
+      - name: Provide temporary non-commercial assets only if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import pathlib, struct, zlib
+          def chunk(tag, data):
+              return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)
+          for filename in ("assets/icon.png", "assets/splash.png"):
+              path = pathlib.Path(filename)
+              if path.is_file():
+                  print(f"Preserving {filename}")
+                  continue
+              path.parent.mkdir(parents=True, exist_ok=True)
+              w = h = 1024
+              raw = (b"\x00" + bytes((36, 62, 88, 255)) * w) * h
+              path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+              print(f"Created ephemeral diagnostic placeholder {filename}; never distribute")
+          PY
+          test -f assets/icon.png
+          test -f assets/splash.png
+          python3 - <<'PY'
+          import pathlib, wave
+          path = pathlib.Path("assets/notification-sound.wav")
+          if path.is_file():
+              print("Preserving existing notification sound")
+          else:
+              path.parent.mkdir(parents=True, exist_ok=True)
+              with wave.open(str(path), "wb") as sound:
+                  sound.setnchannels(1)
+                  sound.setsampwidth(2)
+                  sound.setframerate(22050)
+                  sound.writeframes(b"\x00\x00" * 2205)
+              print("Created ephemeral silent notification sound for CI only; never distribute")
+          PY
+          test -f assets/notification-sound.wav
+      - name: Generate unsigned native project from legacy source
+        run: npx expo prebuild --platform ios --no-install
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+      - name: Diagnostic-only Swift simulator compatibility for legacy expo-device
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("node_modules/expo-device/ios/UIDevice.swift")
+          if not path.is_file():
+              raise SystemExit("Expected expo-device Swift source missing; refusing speculative patch")
+          before = path.read_text()
+          old = "return TARGET_OS_SIMULATOR != 0"
+          new = "#if targetEnvironment(simulator)\n    return true\n    #else\n    return false\n    #endif"
+          if before.count(old) != 1:
+              raise SystemExit(f"Expected exact Swift macro once, got {before.count(old)}; refusing speculative patch")
+          path.write_text(before.replace(old, new))
+          print("Applied exact diagnostic-only simulator macro compatibility fix in node_modules")
+          PY
+      - name: Compile legacy iOS simulator without certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' -type d | head -1)"
+          test -n "$WORKSPACE"
+          SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -derivedDataPath "$RUNNER_TEMP/finsight-native-ios" build 2>&1 | tee ios-native-build.log
+      - name: Install and open unsigned application in iPhone simulator
+        if: success()
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/finsight-native-ios/Build/Products/Debug-iphonesimulator/FInsight.app"
+          test -d "$APP"
+          DEVICE="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); candidates=[v for group in d["devices"].values() for v in group if v.get("isAvailable") and "iPhone" in v.get("name","")]; print(candidates[0]["udid"] if candidates else "")')"
+          test -n "$DEVICE"
+          echo "Running basic simulator launch smoke on $DEVICE"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP"
+          BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP/Info.plist")"
+          test "$BUNDLE" = "org.finsight.mobile"
+          xcrun simctl launch "$DEVICE" "$BUNDLE"
+          mkdir -p ios-smoke
+          xcrun simctl io "$DEVICE" screenshot ios-smoke/finsight-launch.png
+          echo "Simulator launch command and screenshot succeeded; this is NOT functional QA."
+      - name: Archive simulator smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-ios-simulator-smoke
+          path: ios-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Extract first native build failures for review
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, os
+          file = Path("ios-native-build.log")
+          output = Path("ios-native-error-summary.txt")
+          if not file.is_file():
+              output.write_text("No xcodebuild log generated; failure occurred before native compilation.\n")
+          else:
+              pattern = re.compile(r"(?:\berror:|\*\* BUILD FAILED \*\*|fatal error:|Command .* failed)", re.IGNORECASE)
+              matches = []
+              for line in file.open(errors="replace"):
+                  if pattern.search(line) and len(matches) < 30:
+                      matches.append(line.strip()[:1300])
+              output.write_text("\n".join(matches) + "\n" if matches else "No explicit compiler error line detected.\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write("### F-Insight legacy iOS preflight — native compiler summary\n\n")
+              summary.write("Not a release gate. Build, install, simulator and commercial identity must all pass separately.\n\n")
+              summary.write("~~~text\n" + output.read_text()[:10000] + "~~~\n")
+          PY
+      - name: Archive native build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-native-ios-diagnostics
+          path: |
+            ios-native-build.log
+            ios-native-error-summary.txt
+            /tmp/finsight-native-config-errors.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Archive unsigned simulator app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finsight-legacy-unsigned-simulator
+          path: ${{ runner.temp }}/finsight-native-ios/Build/Products/Debug-iphonesimulator/*.app
+          if-no-files-found: error
+          retention-days: 7
