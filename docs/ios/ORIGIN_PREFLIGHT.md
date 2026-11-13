@@ -36,3 +36,16 @@ This is a concrete Swift compilation failure in the legacy `expo-device` depende
 4. Require a real unsigned Xcode build, installation and launch before marking this legacy source iOS-ready. A repaired native build still does not authorize TestFlight or App Store release.
 
 Full build evidence: [native diagnostic artifact](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43286970468/artifacts/13975114921).
+
+## Encerramento do diagnóstico técnico — 13/11/2026
+
+**Etapa exploratória de build + launch iOS concluída.** [Run 43296419099](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43296419099) concluiu com **SUCCESS**: exportação Expo, geração do projeto iOS, CocoaPods, Xcode unsigned, instalação via `simctl`, lançamento e captura de tela do iPhone simulado.
+
+Evidências do próprio workflow:
+- [Screenshot/smoke](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43296419099/artifacts/13982292133).
+- [Arquivo .app unsigned](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43296419099/artifacts/13982965430).
+- [Diagnósticos nativos](https://github.com/HenriqueGuilhermeUx/finsight-legacy/actions/runs/43296419099/artifacts/13982870531).
+
+**Limite deste encerramento:** o teste usou arquivos substitutos de ícone/splash/som e shim Swift somente no runner. `simctl launch` + screenshot não são validação visual, login, persistência, consentimento, rede/API, integridade clínica/financeira nem conformidade App Store. A configuração Expo dinâmica e a correspondência com o AAB Play ainda precisam ser comprovadas.
+
+**Decisão:** encerrar a investigação **de viabilidade técnica unsigned**, mantendo o PR em **draft, sem merge**, e não promover para homologação comercial, release ou TestFlight. O próximo gate depende da identificação do repositório Android comercial e recursos definitivos. Prosseguir com o próximo produto do portfólio sem reabrir testes redundantes neste projeto.
